@@ -2,6 +2,7 @@ import gevent
 import pytest
 from collections import namedtuple
 
+from azure import WindowsAzureMissingResourceError
 from azure.storage import BlobService
 from gevent import coros
 
@@ -190,6 +191,31 @@ def test_no_retry_on_keyboadinterrupt(collect):
 
     # Only one key should have been aborted, since the purpose is to
     # *not* retry when processing KeyboardInterrupt.
+    assert collect.aborted_keys == [key_name]
+
+    # Turn off fault injection and flush/synchronize with close().
+    collect.inject(None)
+    d.close()
+
+    # Since there is no retrying, no keys should be deleted.
+    assert not collect.deleted_keys
+
+
+def test_no_retry_on_not_found_error(collect):
+    """Ensure that KeyboardInterrupts are forwarded."""
+    key_name = 'test-key-name'
+    b = B(name=key_name)
+
+    collect.inject(WindowsAzureMissingResourceError('Not found.'))
+    d = wabs_deleter.Deleter(BlobService('test', 'ing'), 'test-container')
+
+    d.delete(b)
+    while len(collect.aborted_keys) < 1:
+        gevent.sleep(0.1)
+
+    # Only one key should have been aborted, since the purpose is to
+    # *not* retry when processing KeyboardInterrupt.
+    assert not collect.deleted_keys
     assert collect.aborted_keys == [key_name]
 
     # Turn off fault injection and flush/synchronize with close().

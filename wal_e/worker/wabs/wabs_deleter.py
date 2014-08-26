@@ -1,6 +1,8 @@
 from wal_e import retries
 from wal_e.worker.base import _Deleter
 
+from azure import WindowsAzureMissingResourceError
+
 
 class Deleter(_Deleter):
 
@@ -14,4 +16,7 @@ class Deleter(_Deleter):
         # Azure Blob Service has no concept of mass-delete, so we must nuke
         # each blob one-by-one...
         for blob in page:
-            self.wabs_conn.delete_blob(self.container, blob.name)
+            try:
+                self.wabs_conn.delete_blob(self.container, blob.name)
+            except WindowsAzureMissingResourceError:
+                pass
